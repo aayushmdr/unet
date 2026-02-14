@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+unet/data/images/
+unet/data/mask/
+unet/saved_images/
+*.pth
+*.pth.tar
+DeepLab/
