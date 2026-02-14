@@ -1,21 +1,34 @@
-## Code for model utilities
 import torch
 import torch.nn as nn
 import torchvision
+import os
 from dataset import ECPC_Dataset
 from torch.utils.data import DataLoader, Subset
 
-def save_checkpoint(state, filename="unet/model/my_checkpoint.pth.tar"):
-    print("=> Saving Checkpoint")
+# --- Directory Configuration ---
+BASE_MODEL_DIR = "unet/model"
+SAVE_IMG_DIR = "unet/saved_images"
+CHECKPOINT_NAME = "my_checkpoint.pth.tar"
+BEST_MODEL_NAME = "best_model.pth.tar"
+
+def save_checkpoint(state, filename=os.path.join(BASE_MODEL_DIR, CHECKPOINT_NAME)):
+    # Create directory if it doesn't exist
+    folder = os.path.dirname(filename)
+    if folder and not os.path.exists(folder):
+        print(f"=> Creating directory: {folder}")
+        os.makedirs(folder, exist_ok=True)
+        
+    print(f"=> Saving Checkpoint to {filename}")
     torch.save(state, filename)
 
 def load_checkpoint(checkpoint, model):
     print("=> Loading Checkpoint")
     model.load_state_dict(checkpoint["state_dict"])
 
-def save_best_checkpoint(checkpoint,ds):
-            save_checkpoint(checkpoint, filename="unet/model/best_model.pth.tar")
-            print(f"==> New Best Dice: {ds:.4f}, model saved!")
+def save_best_checkpoint(checkpoint, ds):
+    filepath = os.path.join(BASE_MODEL_DIR, BEST_MODEL_NAME)
+    save_checkpoint(checkpoint, filename=filepath)
+    print(f"==> New Best Dice: {ds:.4f}, model saved!")
 
 def get_loaders(
         img_dir,
@@ -65,17 +78,14 @@ def check_accuracy(loader, model, bce_loss, dice_loss, device="cuda"):
             preds = torch.sigmoid(raw_output)
             preds_binary = (preds > 0.5).float()
 
-            # Calculate Losses
             total_bce += bce_loss(raw_output, y).item()
             total_dice_loss += dice_loss(raw_output, y).item()
 
-            # Calculate Pixel Counts for Metrics
             tp += ((preds_binary == 1) & (y == 1)).sum().item()
             fp += ((preds_binary == 1) & (y == 0)).sum().item()
             fn += ((preds_binary == 0) & (y == 1)).sum().item()
             tn += ((preds_binary == 0) & (y == 0)).sum().item()
 
-    # Calculate metrics with epsilon to avoid division by zero
     e = 1e-7
     precision = tp / (tp + fp + e)
     recall = tp / (tp + fn + e)
@@ -93,9 +103,11 @@ def check_accuracy(loader, model, bce_loss, dice_loss, device="cuda"):
         "recall": recall
     }
 
-def save_predictions_as_imgs(
-        loader, model, folder="saved_images/", device="cuda"
-):
+def save_predictions_as_imgs(loader, model, folder=SAVE_IMG_DIR, device="cuda"):
+    # Ensure prediction folder exists
+    if not os.path.exists(folder):
+        os.makedirs(folder, exist_ok=True)
+        
     model.eval()
     for idx, (x, y) in enumerate(loader):
         x = x.to(device=device)
@@ -103,14 +115,8 @@ def save_predictions_as_imgs(
             preds = torch.sigmoid(model(x))
             preds = (preds > 0.5).float()
         
-        torchvision.utils.save_image(
-            preds, f"unet/{folder}/preds_{idx}.png"
-        )
-        torchvision.utils.save_image(y.unsqueeze(1), f"unet/{folder}/gt_{idx}.png")
+        # Using os.path.join for cleaner pathing
+        torchvision.utils.save_image(preds, os.path.join(folder, f"preds_{idx}.png"))
+        torchvision.utils.save_image(y.unsqueeze(1), os.path.join(folder, f"gt_{idx}.png"))
 
     model.train()
-                                    
-
-    
-
-
